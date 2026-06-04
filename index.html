@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 시험문제 생성기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0f;--surface:#13131a;--surface2:#1c1c26;--border:#2a2a3a;--accent:#7c6af7;--accent2:#4fd8c4;--text:#e8e8f0;--muted:#8888a0;--danger:#f06060;--success:#4fd8a0;--warning:#f0b060}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,106,247,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(124,106,247,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.wrap{max-width:820px;margin:0 auto;padding:2.5rem 1.5rem;position:relative;z-index:1}
+.header{text-align:center;margin-bottom:2.5rem}
+.badge{display:inline-block;font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);border:1px solid var(--accent);padding:4px 14px;border-radius:20px;margin-bottom:1rem;letter-spacing:2px}
+.header h1{font-size:clamp(1.8rem,5vw,2.8rem);font-weight:700;line-height:1.15;background:linear-gradient(135deg,#fff 0%,var(--accent) 55%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:.5rem}
+.header p{color:var(--muted);font-size:.95rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem;margin-bottom:1.25rem}
+.clabel{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:1.1rem;display:flex;align-items:center;gap:6px}
+.clabel::before{content:'';width:5px;height:5px;background:var(--accent);border-radius:50%}
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:2.5rem 2rem;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(124,106,247,.05)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.uico{font-size:2.5rem;margin-bottom:.75rem}
+.upload-zone h3{font-size:1rem;font-weight:500;margin-bottom:.3rem}
+.upload-zone p{color:var(--muted);font-size:.825rem}
+.finfo{display:none;align-items:center;gap:10px;background:var(--surface2);border-radius:10px;padding:.875rem 1.1rem;margin-top:.875rem}
+.finfo.show{display:flex}
+.fname{font-size:.875rem;font-weight:500}
+.fsize{font-size:.775rem;color:var(--muted)}
+.frm{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;padding:3px 7px;border-radius:6px;transition:color .2s}
+.frm:hover{color:var(--danger)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:500px){.grid2{grid-template-columns:1fr}}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:.775rem;color:var(--muted);font-weight:500}
+.fg select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:.6rem .9rem;font-size:.875rem;font-family:'Noto Sans KR',sans-serif;outline:none;transition:border-color .2s}
+.fg select:focus{border-color:var(--accent)}
+.rrow{display:flex;align-items:center;gap:10px}
+.rrow input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:2px;outline:none}
+.rrow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer}
+.rval{font-family:'Space Mono',monospace;font-size:13px;color:var(--accent);min-width:24px;text-align:right}
+.btn-main{width:100%;padding:.95rem;font-size:.975rem;font-weight:500;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;transition:all .2s;font-family:'Noto Sans KR',sans-serif;margin-top:.25rem;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-main:hover:not(:disabled){background:#9a8bff;transform:translateY(-1px)}
+.btn-main:disabled{opacity:.35;cursor:not-allowed}
+.btn-sec{background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:.65rem 1.2rem;font-size:.875rem;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .2s}
+.btn-sec:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn-sec:disabled{opacity:.4;cursor:not-allowed}
+.loading{text-align:center;padding:3rem 2rem}
+.spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(124,106,247,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite;margin-bottom:1rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pbar-wrap{background:var(--border);border-radius:4px;height:5px;margin:.875rem 0}
+.pbar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .4s;width:0%}
+.stxt{font-size:.825rem;color:var(--muted)}
+.qhdr{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.875rem;margin-bottom:1.25rem}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 12px;font-size:.775rem;color:var(--muted)}
+.pill span{color:var(--text);font-weight:500}
+.qcard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;margin-bottom:.875rem;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.qnum{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin-bottom:.5rem}
+.qtxt{font-size:.975rem;font-weight:500;line-height:1.65;margin-bottom:1rem}
+.opts{display:flex;flex-direction:column;gap:7px}
+.opt{display:flex;align-items:flex-start;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.7rem .95rem;cursor:pointer;font-size:.875rem;line-height:1.5;text-align:left;width:100%;color:var(--text);font-family:'Noto Sans KR',sans-serif;transition:all .15s}
+.opt:hover:not(:disabled){border-color:var(--accent);background:rgba(124,106,247,.08)}
+.opt.correct{border-color:var(--success);background:rgba(79,216,160,.1);color:var(--success)}
+.opt.wrong{border-color:var(--danger);background:rgba(240,96,96,.1);color:var(--danger)}
+.opt:disabled{cursor:default}
+.olbl{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);min-width:16px;padding-top:2px}
+.opt.correct .olbl{color:var(--success)}
+.opt.wrong .olbl{color:var(--danger)}
+.ox-row{display:flex;gap:10px}
+.ox-btn{flex:1;padding:1.1rem;font-size:1.75rem;background:var(--surface2);border:2px solid var(--border);border-radius:12px;cursor:pointer;transition:all .2s}
+.ox-btn:hover:not(:disabled){border-color:var(--accent);transform:scale(1.02)}
+.ox-btn.correct{border-color:var(--success);background:rgba(79,216,160,.1)}
+.ox-btn.wrong{border-color:var(--danger);background:rgba(240,96,96,.1)}
+.ox-btn:disabled{cursor:default}
+.sa-row{display:flex;gap:8px}
+.sa-inp{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:.65rem 1rem;font-size:.875rem;font-family:'Noto Sans KR',sans-serif;outline:none;transition:border-color .2s}
+.sa-inp:focus{border-color:var(--accent)}
+.tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-family:'Space Mono',monospace;margin-bottom:7px}
+.tag-mc{background:rgba(124,106,247,.15);color:var(--accent)}
+.tag-ox{background:rgba(79,216,160,.15);color:var(--success)}
+.tag-sa{background:rgba(240,176,96,.15);color:var(--warning)}
+.exp{display:none;margin-top:.875rem;background:rgba(124,106,247,.07);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:.875rem 1.1rem;font-size:.825rem;line-height:1.7;color:var(--muted)}
+.exp.show{display:block;animation:fadeUp .25s ease}
+.exp strong{color:var(--text)}
+.navrow{display:flex;justify-content:space-between;align-items:center;margin-top:1.25rem;gap:10px}
+.res-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem;text-align:center;margin-bottom:1.25rem}
+.res-score{font-family:'Space Mono',monospace;font-size:4.5rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:.4rem}
+.res-lbl{color:var(--muted);font-size:.875rem;margin-bottom:2rem}
+.res-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.875rem;max-width:380px;margin:0 auto 2rem}
+.rs{background:var(--surface2);border-radius:10px;padding:1rem;text-align:center}
+.rs .val{font-size:1.6rem;font-weight:700}
+.rs .val.ok{color:var(--success)}
+.rs .val.fail{color:var(--danger)}
+.rs .lbl{font-size:.725rem;color:var(--muted);margin-top:3px}
+.act-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.act-row .btn-sec{flex:1;min-width:120px;text-align:center}
+.rev-item{background:var(--surface);border-left:3px solid var(--danger);border-radius:0 12px 12px 0;padding:1.1rem 1.3rem;margin-bottom:.875rem}
+.rev-q{font-size:.875rem;font-weight:500;margin-bottom:.5rem}
+.rev-ans{font-size:.8rem;color:var(--success)}
+.rev-exp{font-size:.775rem;color:var(--muted);margin-top:3px;line-height:1.6}
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.7rem 1.5rem;font-size:.825rem;z-index:999;transition:transform .3s;white-space:nowrap;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--danger);color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="badge">AI QUIZ ENGINE</div>
+    <h1>PDF 시험문제<br>자동 생성기</h1>
+    <p>PDF를 올리면 AI가 내용을 분석해 시험문제를 무한으로 만들어드려요</p>
+  </div>
+
+  <div id="setup-area">
+    <div class="card">
+      <div class="clabel">01 — PDF 업로드</div>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="pdf-input" accept=".pdf">
+        <div class="uico">📄</div>
+        <h3>PDF를 드래그하거나 클릭해 업로드</h3>
+        <p>최대 20MB · 최대 100페이지</p>
+      </div>
+      <div class="finfo" id="finfo">
+        <span style="font-size:1.4rem">📑</span>
+        <div><div class="fname" id="fname"></div><div class="fsize" id="fsize"></div></div>
+        <button class="frm" id="frm">✕</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="clabel">02 — 문제 설정</div>
+      <div class="grid2">
+        <div class="fg">
+          <label>문제 유형</label>
+          <select id="qtype">
+            <option value="mixed">혼합 (객관식+OX+단답형)</option>
+            <option value="mc">객관식 4지선다</option>
+            <option value="ox">OX 문제</option>
+            <option value="sa">단답형</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>난이도</label>
+          <select id="qdiff">
+            <option value="easy">쉬움</option>
+            <option value="medium" selected>보통</option>
+            <option value="hard">어려움</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg" style="margin-top:.9rem">
+        <label>한 번에 생성할 문제 수</label>
+        <div class="rrow" style="margin-top:.3rem">
+          <input type="range" id="qcount" min="3" max="15" value="5" step="1">
+          <span class="rval" id="qcount-val">5</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-main" id="gen-btn" disabled>✨ &nbsp;시험문제 생성하기</button>
+
+    <div id="loading-area" class="card" style="display:none;text-align:center;padding:2.5rem">
+      <div class="spinner"></div>
+      <div class="pbar-wrap"><div class="pbar" id="pbar"></div></div>
+      <div class="stxt" id="stxt">PDF 분석 중...</div>
+    </div>
+  </div>
+
+  <div id="quiz-area" style="display:none">
+    <div class="qhdr">
+      <div>
+        <div style="font-size:1rem;font-weight:600">시험 진행 중</div>
+        <div style="font-size:.775rem;color:var(--muted);margin-top:3px" id="quiz-sub"></div>
+      </div>
+      <div class="stats">
+        <div class="pill">정답 <span id="sc">0</span></div>
+        <div class="pill">오답 <span id="sw">0</span></div>
+        <div class="pill">남은 <span id="sr">0</span></div>
+      </div>
+    </div>
+    <div id="qcon"></div>
+    <div class="navrow">
+      <button class="btn-sec" id="more-btn">🔄 &nbsp;문제 더 생성</button>
+      <button class="btn-sec" id="finish-btn">결과 보기 →</button>
+    </div>
+  </div>
+
+  <div id="result-area" style="display:none">
+    <div class="res-card">
+      <div class="res-score" id="rscore">0%</div>
+      <div class="res-lbl" id="rlbl"></div>
+      <div class="res-grid">
+        <div class="rs"><div class="val ok" id="rcor">0</div><div class="lbl">정답</div></div>
+        <div class="rs"><div class="val fail" id="rwrong">0</div><div class="lbl">오답</div></div>
+        <div class="rs"><div class="val" id="rtotal">0</div><div class="lbl">총 문제</div></div>
+      </div>
+      <div class="act-row">
+        <button class="btn-sec" id="review-btn">📋 &nbsp;오답 확인</button>
+        <button class="btn-sec" id="retry-btn">🔄 &nbsp;새 문제 세트</button>
+        <button class="btn-sec" id="reset-btn">🏠 &nbsp;처음으로</button>
+      </div>
+    </div>
+    <div id="rev-con"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let pdfFile=null, pdfName='';
+let questions=[], answers={}, correct=0, wrong=0, allAns=[];
+const $=id=>document.getElementById(id);
+
+$('pdf-input').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadPDF(f);});
+const uz=$('upload-zone');
+uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('drag');});
+uz.addEventListener('dragleave',()=>uz.classList.remove('drag'));
+uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')loadPDF(f);else toast('PDF 파일만 업로드 가능합니다.',true);});
+$('frm').addEventListener('click',e=>{e.stopPropagation();resetFile();});
+$('qcount').addEventListener('input',()=>$('qcount-val').textContent=$('qcount').value);
+$('gen-btn').addEventListener('click',startQuiz);
+$('more-btn').addEventListener('click',genMore);
+$('finish-btn').addEventListener('click',showResult);
+$('retry-btn').addEventListener('click',retrySet);
+$('reset-btn').addEventListener('click',resetAll);
+$('review-btn').addEventListener('click',toggleReview);
+
+function loadPDF(f){
+  if(f.size>20*1024*1024){toast('20MB 이하 PDF만 지원합니다.',true);return;}
+  pdfFile=f; pdfName=f.name;
+  const r=new FileReader();
+  r.onload=ev=>{
+    pdfFile._base64=ev.target.result.split(',')[1];
+    $('fname').textContent=f.name;
+    $('fsize').textContent=(f.size/1024).toFixed(1)+' KB';
+    $('finfo').classList.add('show');
+    $('gen-btn').disabled=false;
+    toast('파일 업로드 완료!');
+  };
+  r.readAsDataURL(f);
+}
+function resetFile(){pdfFile=null;pdfName='';$('pdf-input').value='';$('finfo').classList.remove('show');$('gen-btn').disabled=true;}
+
+async function startQuiz(){
+  questions=[];answers={};correct=0;wrong=0;allAns=[];
+  $('setup-area').style.display='none';
+  $('loading-area').style.display='block';
+  animPbar();
+  await genQs(true);
+}
+async function genMore(){
+  const mb=$('more-btn');mb.disabled=true;mb.textContent='생성 중...';
+  await genQs(false);
+  mb.disabled=false;mb.innerHTML='🔄 &nbsp;문제 더 생성';
+}
+
+async function genQs(isFirst){
+  try{
+    const res=await fetch('/api/generate',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        pdf64: pdfFile._base64,
+        qtype: $('qtype').value,
+        qdiff: $('qdiff').value,
+        qcount: $('qcount').value,
+        existing: questions.slice(-5).map(q=>q.question).join('\n')
+      })
+    });
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||'서버 오류 '+res.status);}
+    const parsed=await res.json();
+    const newQs=parsed.questions.map((q,i)=>({...q,id:questions.length+i+1}));
+    questions.push(...newQs);
+    if(isFirst){
+      $('loading-area').style.display='none';
+      $('quiz-area').style.display='block';
+      $('quiz-sub').textContent='📄 '+pdfName;
+    }
+    renderQs(newQs);
+    updateStats();
+    if(!isFirst)setTimeout(()=>window.scrollBy({top:500,behavior:'smooth'}),100);
+  }catch(err){
+    if(isFirst){$('loading-area').style.display='none';$('setup-area').style.display='block';}
+    toast('오류: '+err.message,true);
+  }
+}
+
+function animPbar(){
+  [[200,20,'PDF 읽는 중...'],[800,50,'내용 분석 중...'],[1600,75,'문제 생성 중...'],[2500,90,'마무리 중...']].forEach(([d,v,m])=>
+    setTimeout(()=>{if($('loading-area').style.display!=='none'){$('pbar').style.width=v+'%';$('stxt').textContent=m;}},d));
+}
+
+function renderQs(qs){
+  const con=$('qcon');
+  qs.forEach(q=>{
+    const div=document.createElement('div');div.className='qcard';div.id='q-'+q.id;
+    const tags={mc:'<span class="tag tag-mc">객관식</span>',ox:'<span class="tag tag-ox">OX</span>',sa:'<span class="tag tag-sa">단답형</span>'};
+    let opts='';
+    if(q.type==='mc'){
+      opts='<div class="opts">'+q.options.map((o,i)=>{
+        const s=o.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return `<button class="opt" onclick="ansMC(${q.id},'${s}',this)" data-val="${s}"><span class="olbl">${['①','②','③','④'][i]||''}</span><span>${o}</span></button>`;
+      }).join('')+'</div>';
+    }else if(q.type==='ox'){
+      opts=`<div class="ox-row"><button class="ox-btn" onclick="ansOX(${q.id},'O',this)" title="O">⭕</button><button class="ox-btn" onclick="ansOX(${q.id},'X',this)" title="X">❌</button></div>`;
+    }else{
+      opts=`<div class="sa-row"><input class="sa-inp" type="text" id="sa-${q.id}" placeholder="답 입력 후 Enter" onkeydown="if(event.key==='Enter')ansSA(${q.id})"><button class="btn-sec" onclick="ansSA(${q.id})">제출</button></div>`;
+    }
+    div.innerHTML=`${tags[q.type]||''}<div class="qnum">Q.${q.id}</div><div class="qtxt">${q.question}</div>${opts}<div class="exp" id="exp-${q.id}"><strong>해설:</strong> ${q.explanation}</div>`;
+    con.appendChild(div);
+  });
+}
+
+function ansMC(id,val){
+  if(answers[id]!==undefined)return;
+  const q=questions.find(q=>q.id===id);
+  $('q-'+id).querySelectorAll('.opt').forEach(b=>{b.disabled=true;if(b.dataset.val===q.answer)b.classList.add('correct');if(b.dataset.val===val&&val!==q.answer)b.classList.add('wrong');});
+  record(id,val===q.answer);
+}
+function ansOX(id,val){
+  if(answers[id]!==undefined)return;
+  const q=questions.find(q=>q.id===id);
+  $('q-'+id).querySelectorAll('.ox-btn').forEach(b=>{b.disabled=true;if(b.title===q.answer)b.classList.add('correct');if(b.title===val&&val!==q.answer)b.classList.add('wrong');});
+  record(id,val===q.answer);
+}
+function ansSA(id){
+  if(answers[id]!==undefined)return;
+  const inp=$('sa-'+id);const val=inp.value.trim();if(!val){toast('답을 입력해주세요.');return;}
+  const q=questions.find(q=>q.id===id);
+  inp.disabled=true;const sb=inp.nextElementSibling;if(sb)sb.disabled=true;
+  const ok=val.toLowerCase().includes(q.answer.toLowerCase())||q.answer.toLowerCase().includes(val.toLowerCase());
+  inp.style.borderColor=ok?'var(--success)':'var(--danger)';
+  if(!ok){const h=document.createElement('div');h.style.cssText='font-size:.775rem;color:var(--danger);margin-top:5px';h.textContent='정답: '+q.answer;inp.parentElement.insertAdjacentElement('afterend',h);}
+  record(id,ok);
+}
+function record(id,ok){
+  answers[id]=ok;allAns.push({id,ok});
+  if(ok)correct++;else wrong++;
+  updateStats();
+  const e=$('exp-'+id);if(e)e.classList.add('show');
+}
+function updateStats(){$('sc').textContent=correct;$('sw').textContent=wrong;$('sr').textContent=questions.length-Object.keys(answers).length;}
+
+function showResult(){
+  const ans=Object.keys(answers).length;
+  const pct=ans>0?Math.round((correct/ans)*100):0;
+  $('rscore').textContent=pct+'%';
+  const grade=pct>=90?'🏆 우수!':pct>=70?'👍 잘했어요':pct>=50?'📚 조금 더 공부해요':'💪 다시 도전!';
+  $('rlbl').textContent=grade+' · '+ans+'문제 중 '+correct+'개 정답';
+  $('rcor').textContent=correct;$('rwrong').textContent=wrong;$('rtotal').textContent=ans;
+  $('quiz-area').style.display='none';$('result-area').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function toggleReview(){
+  const c=$('rev-con');
+  if(c.childElementCount>0){c.innerHTML='';$('review-btn').textContent='📋  오답 확인';return;}
+  $('review-btn').textContent='📋  오답 닫기';
+  const wrongs=allAns.filter(a=>!a.ok);
+  if(!wrongs.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--success)">🎉 오답이 없어요!</div>';return;}
+  wrongs.forEach(a=>{
+    const q=questions.find(q=>q.id===a.id);
+    const d=document.createElement('div');d.className='rev-item';
+    d.innerHTML=`<div class="rev-q">Q.${q.id} &nbsp;${q.question}</div><div class="rev-ans">✓ 정답: ${q.answer}</div><div class="rev-exp">${q.explanation}</div>`;
+    c.appendChild(d);
+  });
+}
+async function retrySet(){
+  questions=[];answers={};correct=0;wrong=0;allAns=[];
+  $('result-area').style.display='none';$('qcon').innerHTML='';$('rev-con').innerHTML='';
+  $('loading-area').style.display='block';animPbar();await genQs(true);
+}
+function resetAll(){
+  questions=[];answers={};correct=0;wrong=0;allAns=[];pdfFile=null;pdfName='';
+  $('pdf-input').value='';$('finfo').classList.remove('show');$('gen-btn').disabled=true;
+  $('qcon').innerHTML='';$('rev-con').innerHTML='';
+  $('result-area').style.display='none';$('quiz-area').style.display='none';$('loading-area').style.display='none';
+  $('setup-area').style.display='block';window.scrollTo({top:0,behavior:'smooth'});
+}
+function toast(msg,isErr=false){
+  const el=$('toast');el.textContent=msg;el.className='toast show'+(isErr?' err':'');
+  setTimeout(()=>el.className='toast',2800);
+}
+</script>
+</body>
+</html>
