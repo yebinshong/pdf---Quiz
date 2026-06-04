@@ -18,6 +18,11 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem;margin-bottom:1.25rem}
 .clabel{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:1.1rem;display:flex;align-items:center;gap:6px}
 .clabel::before{content:'';width:5px;height:5px;background:var(--accent);border-radius:50%}
+.key-row{display:flex;gap:8px}
+.key-row input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:.65rem 1rem;font-size:.85rem;font-family:'Space Mono',monospace;outline:none;transition:border-color .2s}
+.key-row input:focus{border-color:var(--accent)}
+.key-note{font-size:.75rem;color:var(--muted);margin-top:.6rem}
+.key-note a{color:var(--accent);text-decoration:none}
 .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:2.5rem 2rem;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden}
 .upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(124,106,247,.05)}
 .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
@@ -46,7 +51,6 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 .btn-sec{background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:.65rem 1.2rem;font-size:.875rem;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .2s}
 .btn-sec:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .btn-sec:disabled{opacity:.4;cursor:not-allowed}
-.loading{text-align:center;padding:3rem 2rem}
 .spinner{display:inline-block;width:28px;height:28px;border:2px solid rgba(124,106,247,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite;margin-bottom:1rem}
 @keyframes spin{to{transform:rotate(360deg)}}
 .pbar-wrap{background:var(--border);border-radius:4px;height:5px;margin:.875rem 0}
@@ -116,12 +120,24 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 
   <div id="setup-area">
     <div class="card">
+      <div class="clabel">00 — Gemini API 키</div>
+      <div class="key-row">
+        <input type="password" id="apikey" placeholder="AIza...">
+        <button class="btn-sec" onclick="toggleKey()">👁 보기</button>
+      </div>
+      <div class="key-note">
+        🔒 키는 이 브라우저에서만 사용되며 외부로 전송되지 않아요 &nbsp;·&nbsp;
+        <a href="https://aistudio.google.com/app/apikey" target="_blank">무료 키 발급 →</a>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="clabel">01 — PDF 업로드</div>
       <div class="upload-zone" id="upload-zone">
         <input type="file" id="pdf-input" accept=".pdf">
         <div class="uico">📄</div>
         <h3>PDF를 드래그하거나 클릭해 업로드</h3>
-        <p>최대 20MB · 최대 100페이지</p>
+        <p>최대 4,500KB (4.5MB) · 최대 50페이지</p>
       </div>
       <div class="finfo" id="finfo">
         <span style="font-size:1.4rem">📑</span>
@@ -210,7 +226,6 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="toast" id="toast"></div>
 
 <script>
-// 전역 변수
 var pdfBase64 = null;
 var pdfName = '';
 var questions = [];
@@ -221,24 +236,28 @@ var allAns = [];
 
 function $(id){ return document.getElementById(id); }
 
-// PDF 업로드
-$('pdf-input').addEventListener('change', function(e){
-  var f = e.target.files[0];
-  if(f) loadPDF(f);
-});
+function toggleKey(){
+  var inp=$('apikey'), btn=inp.nextElementSibling;
+  if(inp.type==='password'){inp.type='text';btn.textContent='🙈 숨기기';}
+  else{inp.type='password';btn.textContent='👁 보기';}
+}
 
-var uz = $('upload-zone');
+function getKey(){ return $('apikey').value.trim(); }
+
+$('apikey').addEventListener('input', updateBtn);
+$('pdf-input').addEventListener('change', function(e){ var f=e.target.files[0]; if(f) loadPDF(f); });
+
+var uz=$('upload-zone');
 uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('drag'); });
 uz.addEventListener('dragleave', function(){ uz.classList.remove('drag'); });
 uz.addEventListener('drop', function(e){
   e.preventDefault(); uz.classList.remove('drag');
-  var f = e.dataTransfer.files[0];
-  if(f && f.type === 'application/pdf') loadPDF(f);
+  var f=e.dataTransfer.files[0];
+  if(f && f.type==='application/pdf') loadPDF(f);
   else toast('PDF 파일만 업로드 가능합니다.', true);
 });
-
 $('frm').addEventListener('click', function(e){ e.stopPropagation(); resetFile(); });
-$('qcount').addEventListener('input', function(){ $('qcount-val').textContent = $('qcount').value; });
+$('qcount').addEventListener('input', function(){ $('qcount-val').textContent=$('qcount').value; });
 $('gen-btn').addEventListener('click', startQuiz);
 $('more-btn').addEventListener('click', genMore);
 $('finish-btn').addEventListener('click', showResult);
@@ -247,28 +266,33 @@ $('reset-btn').addEventListener('click', resetAll);
 $('review-btn').addEventListener('click', toggleReview);
 
 function loadPDF(f){
-  if(f.size > 20*1024*1024){ toast('20MB 이하 PDF만 지원합니다.', true); return; }
+  if(f.size > 4.5*1024*1024){ toast('4,500KB 이하 PDF만 가능합니다.', true); return; }
   var reader = new FileReader();
   reader.onload = function(ev){
     pdfBase64 = ev.target.result.split(',')[1];
     pdfName = f.name;
     $('fname').textContent = f.name;
-    $('fsize').textContent = (f.size/1024).toFixed(1) + ' KB';
+    $('fsize').textContent = (f.size/1024).toFixed(0) + ' KB';
     $('finfo').classList.add('show');
-    $('gen-btn').disabled = false;
+    updateBtn();
     toast('파일 업로드 완료!');
   };
   reader.readAsDataURL(f);
 }
 
 function resetFile(){
-  pdfBase64 = null; pdfName = '';
-  $('pdf-input').value = '';
+  pdfBase64=null; pdfName='';
+  $('pdf-input').value='';
   $('finfo').classList.remove('show');
-  $('gen-btn').disabled = true;
+  updateBtn();
+}
+
+function updateBtn(){
+  $('gen-btn').disabled = !pdfBase64 || !getKey();
 }
 
 function startQuiz(){
+  if(!getKey()){ toast('API 키를 입력해주세요.', true); return; }
   if(!pdfBase64){ toast('PDF를 먼저 업로드해주세요.', true); return; }
   questions=[]; answers={}; correct=0; wrong=0; allAns=[];
   $('setup-area').style.display='none';
@@ -283,149 +307,137 @@ function genMore(){
 }
 
 function genQs(isFirst){
-  if(!pdfBase64){ toast('PDF 데이터가 없습니다.', true); return; }
-
-  var dmap = {easy:'쉬운', medium:'중간 난이도의', hard:'어려운'};
-  var tmap = {
+  var dmap={easy:'쉬운',medium:'중간 난이도의',hard:'어려운'};
+  var tmap={
     mixed:'객관식 4지선다, OX 문제, 단답형을 고루 섞어서',
     mc:'모두 객관식 4지선다로',
     ox:'모두 OX 문제로',
     sa:'모두 단답형으로'
   };
-  var qtype = $('qtype').value;
-  var qdiff = $('qdiff').value;
-  var qcount = $('qcount').value;
-  var existing = questions.slice(-5).map(function(q){ return q.question; }).join('\n');
-  var avoidStr = existing ? '\n이미 출제된 문제와 겹치지 않게 해주세요:\n' + existing : '';
+  var qtype=$('qtype').value, qdiff=$('qdiff').value, qcount=$('qcount').value;
+  var existing=questions.slice(-5).map(function(q){return q.question;}).join('\n');
+  var avoidStr=existing?'\n이미 출제된 문제와 겹치지 않게 해주세요:\n'+existing:'';
 
-  var body = JSON.stringify({
-    pdf64: pdfBase64,
-    qtype: qtype,
-    qdiff: qdiff,
-    qcount: qcount,
-    existing: existing
-  });
+  var prompt='이 PDF 문서를 꼼꼼히 분석해서 '+(dmap[qdiff]||'중간 난이도의')+' 시험문제 '+qcount+'개를 만들어주세요.\n'+(tmap[qtype]||tmap.mixed)+' 출제해주세요.'+avoidStr+'\n\n반드시 아래 JSON 형식만 반환하세요 (마크다운 없이 순수 JSON):\n{"questions":[{"id":1,"type":"mc","question":"문제","options":["①보기1","②보기2","③보기3","④보기4"],"answer":"①보기1","explanation":"해설"},{"id":2,"type":"ox","question":"문제","options":["O","X"],"answer":"O","explanation":"해설"},{"id":3,"type":"sa","question":"___ 에 들어갈 말은?","options":[],"answer":"키워드","explanation":"해설"}]}\n\n규칙: type은 mc/ox/sa 중 하나, mc의 answer는 options 중 하나와 정확히 일치, ox의 answer는 O 또는 X, sa의 answer는 짧은 키워드, 모든 문제는 PDF 내용에서만 출제';
 
-  fetch('/.netlify/functions/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+getKey(), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      contents:[{parts:[
+        {inline_data:{mime_type:'application/pdf',data:pdfBase64}},
+        {text:prompt}
+      ]}],
+      generationConfig:{temperature:0.7,maxOutputTokens:4096}
+    })
   })
   .then(function(res){
-    if(!res.ok) return res.json().then(function(e){ throw new Error(e.error || '서버 오류 ' + res.status); });
+    if(!res.ok) return res.json().then(function(e){throw new Error(e.error&&e.error.message?e.error.message:'API 오류 '+res.status);});
     return res.json();
   })
-  .then(function(parsed){
-    var newQs = parsed.questions.map(function(q, i){
-      return Object.assign({}, q, { id: questions.length + i + 1 });
+  .then(function(data){
+    var raw=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts&&data.candidates[0].content.parts[0]?data.candidates[0].content.parts[0].text:'';
+    raw=raw.replace(/```json|```/g,'').trim();
+    var start=raw.indexOf('{'), end=raw.lastIndexOf('}');
+    if(start===-1||end===-1) throw new Error('응답 파싱 오류');
+    var parsed=JSON.parse(raw.slice(start,end+1));
+    var newQs=parsed.questions.map(function(q,i){
+      return {id:questions.length+i+1,type:q.type,question:q.question,options:q.options,answer:q.answer,explanation:q.explanation};
     });
-    questions = questions.concat(newQs);
+    questions=questions.concat(newQs);
     if(isFirst){
       $('loading-area').style.display='none';
       $('quiz-area').style.display='block';
-      $('quiz-sub').textContent = '📄 ' + pdfName;
+      $('quiz-sub').textContent='📄 '+pdfName;
     }
     renderQs(newQs);
     updateStats();
     if(!isFirst){
       $('more-btn').disabled=false;
       $('more-btn').innerHTML='🔄 &nbsp;문제 더 생성';
-      setTimeout(function(){ window.scrollBy({top:500,behavior:'smooth'}); }, 100);
+      setTimeout(function(){window.scrollBy({top:500,behavior:'smooth'});},100);
     }
   })
   .catch(function(err){
     console.error(err);
-    if(isFirst){ $('loading-area').style.display='none'; $('setup-area').style.display='block'; }
-    else{ $('more-btn').disabled=false; $('more-btn').innerHTML='🔄 &nbsp;문제 더 생성'; }
-    toast('오류: ' + err.message, true);
+    if(isFirst){$('loading-area').style.display='none';$('setup-area').style.display='block';}
+    else{$('more-btn').disabled=false;$('more-btn').innerHTML='🔄 &nbsp;문제 더 생성';}
+    toast('오류: '+err.message,true);
   });
 }
 
 function animPbar(){
-  var steps=[[200,20,'PDF 읽는 중...'],[800,50,'내용 분석 중...'],[1600,75,'문제 생성 중...'],[2500,90,'마무리 중...']];
-  steps.forEach(function(s){
+  [[200,20,'PDF 읽는 중...'],[800,50,'내용 분석 중...'],[1600,75,'문제 생성 중...'],[2500,90,'마무리 중...']].forEach(function(s){
     setTimeout(function(){
-      if($('loading-area').style.display!=='none'){
-        $('pbar').style.width=s[1]+'%';
-        $('stxt').textContent=s[2];
-      }
-    }, s[0]);
+      if($('loading-area').style.display!=='none'){$('pbar').style.width=s[1]+'%';$('stxt').textContent=s[2];}
+    },s[0]);
   });
 }
 
 function renderQs(qs){
-  var con = $('qcon');
+  var con=$('qcon');
   qs.forEach(function(q){
-    var div = document.createElement('div');
-    div.className='qcard'; div.id='q-'+q.id;
-    var tags = {mc:'<span class="tag tag-mc">객관식</span>',ox:'<span class="tag tag-ox">OX</span>',sa:'<span class="tag tag-sa">단답형</span>'};
-    var opts = '';
+    var div=document.createElement('div');div.className='qcard';div.id='q-'+q.id;
+    var tags={mc:'<span class="tag tag-mc">객관식</span>',ox:'<span class="tag tag-ox">OX</span>',sa:'<span class="tag tag-sa">단답형</span>'};
+    var opts='';
     if(q.type==='mc'){
-      opts = '<div class="opts">' + q.options.map(function(o,i){
-        var s = o.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      opts='<div class="opts">'+q.options.map(function(o,i){
+        var s=o.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
         return '<button class="opt" onclick="ansMC('+q.id+',\''+s+'\',this)" data-val="'+s+'"><span class="olbl">'+(['①','②','③','④'][i]||'')+'</span><span>'+o+'</span></button>';
-      }).join('') + '</div>';
+      }).join('')+'</div>';
     } else if(q.type==='ox'){
-      opts = '<div class="ox-row"><button class="ox-btn" onclick="ansOX('+q.id+',\'O\',this)" title="O">⭕</button><button class="ox-btn" onclick="ansOX('+q.id+',\'X\',this)" title="X">❌</button></div>';
+      opts='<div class="ox-row"><button class="ox-btn" onclick="ansOX('+q.id+',\'O\',this)" title="O">⭕</button><button class="ox-btn" onclick="ansOX('+q.id+',\'X\',this)" title="X">❌</button></div>';
     } else {
-      opts = '<div class="sa-row"><input class="sa-inp" type="text" id="sa-'+q.id+'" placeholder="답 입력 후 Enter" onkeydown="if(event.key===\'Enter\')ansSA('+q.id+')"><button class="btn-sec" onclick="ansSA('+q.id+')">제출</button></div>';
+      opts='<div class="sa-row"><input class="sa-inp" type="text" id="sa-'+q.id+'" placeholder="답 입력 후 Enter" onkeydown="if(event.key===\'Enter\')ansSA('+q.id+')"><button class="btn-sec" onclick="ansSA('+q.id+')">제출</button></div>';
     }
-    div.innerHTML = (tags[q.type]||'')+'<div class="qnum">Q.'+q.id+'</div><div class="qtxt">'+q.question+'</div>'+opts+'<div class="exp" id="exp-'+q.id+'"><strong>해설:</strong> '+q.explanation+'</div>';
+    div.innerHTML=(tags[q.type]||'')+'<div class="qnum">Q.'+q.id+'</div><div class="qtxt">'+q.question+'</div>'+opts+'<div class="exp" id="exp-'+q.id+'"><strong>해설:</strong> '+q.explanation+'</div>';
     con.appendChild(div);
   });
 }
 
 function ansMC(id,val,btn){
-  if(answers[id]!==undefined) return;
-  var q = questions.find(function(q){ return q.id===id; });
+  if(answers[id]!==undefined)return;
+  var q=questions.find(function(q){return q.id===id;});
   document.querySelectorAll('#q-'+id+' .opt').forEach(function(b){
     b.disabled=true;
-    if(b.dataset.val===q.answer) b.classList.add('correct');
-    if(b.dataset.val===val && val!==q.answer) b.classList.add('wrong');
+    if(b.dataset.val===q.answer)b.classList.add('correct');
+    if(b.dataset.val===val&&val!==q.answer)b.classList.add('wrong');
   });
-  record(id, val===q.answer);
+  record(id,val===q.answer);
 }
 
 function ansOX(id,val,btn){
-  if(answers[id]!==undefined) return;
-  var q = questions.find(function(q){ return q.id===id; });
+  if(answers[id]!==undefined)return;
+  var q=questions.find(function(q){return q.id===id;});
   document.querySelectorAll('#q-'+id+' .ox-btn').forEach(function(b){
     b.disabled=true;
-    if(b.title===q.answer) b.classList.add('correct');
-    if(b.title===val && val!==q.answer) b.classList.add('wrong');
+    if(b.title===q.answer)b.classList.add('correct');
+    if(b.title===val&&val!==q.answer)b.classList.add('wrong');
   });
-  record(id, val===q.answer);
+  record(id,val===q.answer);
 }
 
 function ansSA(id){
-  if(answers[id]!==undefined) return;
-  var inp = $('sa-'+id);
-  var val = inp.value.trim();
-  if(!val){ toast('답을 입력해주세요.'); return; }
-  var q = questions.find(function(q){ return q.id===id; });
-  inp.disabled=true;
-  var sb=inp.nextElementSibling; if(sb) sb.disabled=true;
-  var ok = val.toLowerCase().includes(q.answer.toLowerCase()) || q.answer.toLowerCase().includes(val.toLowerCase());
-  inp.style.borderColor = ok ? 'var(--success)' : 'var(--danger)';
-  if(!ok){
-    var h=document.createElement('div');
-    h.style.cssText='font-size:.775rem;color:var(--danger);margin-top:5px';
-    h.textContent='정답: '+q.answer;
-    inp.parentElement.insertAdjacentElement('afterend',h);
-  }
-  record(id, ok);
+  if(answers[id]!==undefined)return;
+  var inp=$('sa-'+id);var val=inp.value.trim();
+  if(!val){toast('답을 입력해주세요.');return;}
+  var q=questions.find(function(q){return q.id===id;});
+  inp.disabled=true;var sb=inp.nextElementSibling;if(sb)sb.disabled=true;
+  var ok=val.toLowerCase().indexOf(q.answer.toLowerCase())!==-1||q.answer.toLowerCase().indexOf(val.toLowerCase())!==-1;
+  inp.style.borderColor=ok?'var(--success)':'var(--danger)';
+  if(!ok){var h=document.createElement('div');h.style.cssText='font-size:.775rem;color:var(--danger);margin-top:5px';h.textContent='정답: '+q.answer;inp.parentElement.insertAdjacentElement('afterend',h);}
+  record(id,ok);
 }
 
 function record(id,ok){
-  answers[id]=ok; allAns.push({id:id,ok:ok});
-  if(ok) correct++; else wrong++;
+  answers[id]=ok;allAns.push({id:id,ok:ok});
+  if(ok)correct++;else wrong++;
   updateStats();
-  var e=$('exp-'+id); if(e) e.classList.add('show');
+  var e=$('exp-'+id);if(e)e.classList.add('show');
 }
 
 function updateStats(){
-  $('sc').textContent=correct;
-  $('sw').textContent=wrong;
+  $('sc').textContent=correct;$('sw').textContent=wrong;
   $('sr').textContent=questions.length-Object.keys(answers).length;
 }
 
@@ -435,44 +447,44 @@ function showResult(){
   $('rscore').textContent=pct+'%';
   var grade=pct>=90?'🏆 우수!':pct>=70?'👍 잘했어요':pct>=50?'📚 조금 더 공부해요':'💪 다시 도전!';
   $('rlbl').textContent=grade+' · '+ans+'문제 중 '+correct+'개 정답';
-  $('rcor').textContent=correct; $('rwrong').textContent=wrong; $('rtotal').textContent=ans;
-  $('quiz-area').style.display='none'; $('result-area').style.display='block';
+  $('rcor').textContent=correct;$('rwrong').textContent=wrong;$('rtotal').textContent=ans;
+  $('quiz-area').style.display='none';$('result-area').style.display='block';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function toggleReview(){
   var c=$('rev-con');
-  if(c.childElementCount>0){ c.innerHTML=''; $('review-btn').textContent='📋  오답 확인'; return; }
+  if(c.childElementCount>0){c.innerHTML='';$('review-btn').textContent='📋  오답 확인';return;}
   $('review-btn').textContent='📋  오답 닫기';
-  var wrongs=allAns.filter(function(a){ return !a.ok; });
-  if(!wrongs.length){ c.innerHTML='<div class="card" style="text-align:center;color:var(--success)">🎉 오답이 없어요!</div>'; return; }
+  var wrongs=allAns.filter(function(a){return !a.ok;});
+  if(!wrongs.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--success)">🎉 오답이 없어요!</div>';return;}
   wrongs.forEach(function(a){
-    var q=questions.find(function(q){ return q.id===a.id; });
-    var d=document.createElement('div'); d.className='rev-item';
+    var q=questions.find(function(q){return q.id===a.id;});
+    var d=document.createElement('div');d.className='rev-item';
     d.innerHTML='<div class="rev-q">Q.'+q.id+' '+q.question+'</div><div class="rev-ans">✓ 정답: '+q.answer+'</div><div class="rev-exp">'+q.explanation+'</div>';
     c.appendChild(d);
   });
 }
 
 function retrySet(){
-  questions=[]; answers={}; correct=0; wrong=0; allAns=[];
-  $('result-area').style.display='none'; $('qcon').innerHTML=''; $('rev-con').innerHTML='';
-  $('loading-area').style.display='block'; animPbar(); genQs(true);
+  questions=[];answers={};correct=0;wrong=0;allAns=[];
+  $('result-area').style.display='none';$('qcon').innerHTML='';$('rev-con').innerHTML='';
+  $('loading-area').style.display='block';animPbar();genQs(true);
 }
 
 function resetAll(){
-  questions=[]; answers={}; correct=0; wrong=0; allAns=[]; pdfBase64=null; pdfName='';
-  $('pdf-input').value=''; $('finfo').classList.remove('show'); $('gen-btn').disabled=true;
-  $('qcon').innerHTML=''; $('rev-con').innerHTML='';
-  $('result-area').style.display='none'; $('quiz-area').style.display='none';
-  $('loading-area').style.display='none'; $('setup-area').style.display='block';
+  questions=[];answers={};correct=0;wrong=0;allAns=[];pdfBase64=null;pdfName='';
+  $('pdf-input').value='';$('finfo').classList.remove('show');updateBtn();
+  $('qcon').innerHTML='';$('rev-con').innerHTML='';
+  $('result-area').style.display='none';$('quiz-area').style.display='none';
+  $('loading-area').style.display='none';$('setup-area').style.display='block';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function toast(msg,isErr){
-  var el=$('toast'); el.textContent=msg;
+  var el=$('toast');el.textContent=msg;
   el.className='toast show'+(isErr?' err':'');
-  setTimeout(function(){ el.className='toast'; }, 2800);
+  setTimeout(function(){el.className='toast';},2800);
 }
 </script>
 </body>
