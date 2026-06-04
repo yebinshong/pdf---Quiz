@@ -20,7 +20,6 @@ exports.handler = async (event) => {
     };
 
     const avoidStr = existing ? `\n이미 출제된 문제와 겹치지 않게 해주세요:\n${existing}` : '';
-
     const prompt = `이 PDF 문서를 꼼꼼히 분석해서 ${dmap[qdiff] || '중간 난이도의'} 시험문제 ${qcount}개를 만들어주세요.
 ${tmap[qtype] || tmap.mixed} 출제해주세요.${avoidStr}
 
@@ -39,7 +38,7 @@ ${tmap[qtype] || tmap.mixed} 출제해주세요.${avoidStr}
             { inline_data: { mime_type: 'application/pdf', data: pdf64 } },
             { text: prompt }
           ]}],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
         })
       }
     );
@@ -62,6 +61,7 @@ ${tmap[qtype] || tmap.mixed} 출제해주세요.${avoidStr}
       body: JSON.stringify(parsed)
     };
   } catch (err) {
+    console.error('Error:', err.message);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
