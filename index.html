@@ -210,178 +210,269 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 <div class="toast" id="toast"></div>
 
 <script>
-let pdfFile=null, pdfName='';
-let questions=[], answers={}, correct=0, wrong=0, allAns=[];
-const $=id=>document.getElementById(id);
+// 전역 변수
+var pdfBase64 = null;
+var pdfName = '';
+var questions = [];
+var answers = {};
+var correct = 0;
+var wrong = 0;
+var allAns = [];
 
-$('pdf-input').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadPDF(f);});
-const uz=$('upload-zone');
-uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('drag');});
-uz.addEventListener('dragleave',()=>uz.classList.remove('drag'));
-uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')loadPDF(f);else toast('PDF 파일만 업로드 가능합니다.',true);});
-$('frm').addEventListener('click',e=>{e.stopPropagation();resetFile();});
-$('qcount').addEventListener('input',()=>$('qcount-val').textContent=$('qcount').value);
-$('gen-btn').addEventListener('click',startQuiz);
-$('more-btn').addEventListener('click',genMore);
-$('finish-btn').addEventListener('click',showResult);
-$('retry-btn').addEventListener('click',retrySet);
-$('reset-btn').addEventListener('click',resetAll);
-$('review-btn').addEventListener('click',toggleReview);
+function $(id){ return document.getElementById(id); }
+
+// PDF 업로드
+$('pdf-input').addEventListener('change', function(e){
+  var f = e.target.files[0];
+  if(f) loadPDF(f);
+});
+
+var uz = $('upload-zone');
+uz.addEventListener('dragover', function(e){ e.preventDefault(); uz.classList.add('drag'); });
+uz.addEventListener('dragleave', function(){ uz.classList.remove('drag'); });
+uz.addEventListener('drop', function(e){
+  e.preventDefault(); uz.classList.remove('drag');
+  var f = e.dataTransfer.files[0];
+  if(f && f.type === 'application/pdf') loadPDF(f);
+  else toast('PDF 파일만 업로드 가능합니다.', true);
+});
+
+$('frm').addEventListener('click', function(e){ e.stopPropagation(); resetFile(); });
+$('qcount').addEventListener('input', function(){ $('qcount-val').textContent = $('qcount').value; });
+$('gen-btn').addEventListener('click', startQuiz);
+$('more-btn').addEventListener('click', genMore);
+$('finish-btn').addEventListener('click', showResult);
+$('retry-btn').addEventListener('click', retrySet);
+$('reset-btn').addEventListener('click', resetAll);
+$('review-btn').addEventListener('click', toggleReview);
 
 function loadPDF(f){
-  if(f.size>20*1024*1024){toast('20MB 이하 PDF만 지원합니다.',true);return;}
-  pdfFile=f; pdfName=f.name;
-  const r=new FileReader();
-  r.onload=ev=>{
-    pdfFile._base64=ev.target.result.split(',')[1];
-    $('fname').textContent=f.name;
-    $('fsize').textContent=(f.size/1024).toFixed(1)+' KB';
+  if(f.size > 20*1024*1024){ toast('20MB 이하 PDF만 지원합니다.', true); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    pdfBase64 = ev.target.result.split(',')[1];
+    pdfName = f.name;
+    $('fname').textContent = f.name;
+    $('fsize').textContent = (f.size/1024).toFixed(1) + ' KB';
     $('finfo').classList.add('show');
-    $('gen-btn').disabled=false;
+    $('gen-btn').disabled = false;
     toast('파일 업로드 완료!');
   };
-  r.readAsDataURL(f);
+  reader.readAsDataURL(f);
 }
-function resetFile(){pdfFile=null;pdfName='';$('pdf-input').value='';$('finfo').classList.remove('show');$('gen-btn').disabled=true;}
 
-async function startQuiz(){
-  questions=[];answers={};correct=0;wrong=0;allAns=[];
+function resetFile(){
+  pdfBase64 = null; pdfName = '';
+  $('pdf-input').value = '';
+  $('finfo').classList.remove('show');
+  $('gen-btn').disabled = true;
+}
+
+function startQuiz(){
+  if(!pdfBase64){ toast('PDF를 먼저 업로드해주세요.', true); return; }
+  questions=[]; answers={}; correct=0; wrong=0; allAns=[];
   $('setup-area').style.display='none';
   $('loading-area').style.display='block';
   animPbar();
-  await genQs(true);
-}
-async function genMore(){
-  const mb=$('more-btn');mb.disabled=true;mb.textContent='생성 중...';
-  await genQs(false);
-  mb.disabled=false;mb.innerHTML='🔄 &nbsp;문제 더 생성';
+  genQs(true);
 }
 
-async function genQs(isFirst){
-  try{
-    const res=await fetch('/.netlify/functions/generate',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        pdf64: pdfFile._base64,
-        qtype: $('qtype').value,
-        qdiff: $('qdiff').value,
-        qcount: $('qcount').value,
-        existing: questions.slice(-5).map(q=>q.question).join('\n')
-      })
+function genMore(){
+  var mb=$('more-btn'); mb.disabled=true; mb.textContent='생성 중...';
+  genQs(false);
+}
+
+function genQs(isFirst){
+  if(!pdfBase64){ toast('PDF 데이터가 없습니다.', true); return; }
+
+  var dmap = {easy:'쉬운', medium:'중간 난이도의', hard:'어려운'};
+  var tmap = {
+    mixed:'객관식 4지선다, OX 문제, 단답형을 고루 섞어서',
+    mc:'모두 객관식 4지선다로',
+    ox:'모두 OX 문제로',
+    sa:'모두 단답형으로'
+  };
+  var qtype = $('qtype').value;
+  var qdiff = $('qdiff').value;
+  var qcount = $('qcount').value;
+  var existing = questions.slice(-5).map(function(q){ return q.question; }).join('\n');
+  var avoidStr = existing ? '\n이미 출제된 문제와 겹치지 않게 해주세요:\n' + existing : '';
+
+  var body = JSON.stringify({
+    pdf64: pdfBase64,
+    qtype: qtype,
+    qdiff: qdiff,
+    qcount: qcount,
+    existing: existing
+  });
+
+  fetch('/.netlify/functions/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  })
+  .then(function(res){
+    if(!res.ok) return res.json().then(function(e){ throw new Error(e.error || '서버 오류 ' + res.status); });
+    return res.json();
+  })
+  .then(function(parsed){
+    var newQs = parsed.questions.map(function(q, i){
+      return Object.assign({}, q, { id: questions.length + i + 1 });
     });
-    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||'서버 오류 '+res.status);}
-    const parsed=await res.json();
-    const newQs=parsed.questions.map((q,i)=>({...q,id:questions.length+i+1}));
-    questions.push(...newQs);
+    questions = questions.concat(newQs);
     if(isFirst){
       $('loading-area').style.display='none';
       $('quiz-area').style.display='block';
-      $('quiz-sub').textContent='📄 '+pdfName;
+      $('quiz-sub').textContent = '📄 ' + pdfName;
     }
     renderQs(newQs);
     updateStats();
-    if(!isFirst)setTimeout(()=>window.scrollBy({top:500,behavior:'smooth'}),100);
-  }catch(err){
-    if(isFirst){$('loading-area').style.display='none';$('setup-area').style.display='block';}
-    toast('오류: '+err.message,true);
-  }
+    if(!isFirst){
+      $('more-btn').disabled=false;
+      $('more-btn').innerHTML='🔄 &nbsp;문제 더 생성';
+      setTimeout(function(){ window.scrollBy({top:500,behavior:'smooth'}); }, 100);
+    }
+  })
+  .catch(function(err){
+    console.error(err);
+    if(isFirst){ $('loading-area').style.display='none'; $('setup-area').style.display='block'; }
+    else{ $('more-btn').disabled=false; $('more-btn').innerHTML='🔄 &nbsp;문제 더 생성'; }
+    toast('오류: ' + err.message, true);
+  });
 }
 
 function animPbar(){
-  [[200,20,'PDF 읽는 중...'],[800,50,'내용 분석 중...'],[1600,75,'문제 생성 중...'],[2500,90,'마무리 중...']].forEach(([d,v,m])=>
-    setTimeout(()=>{if($('loading-area').style.display!=='none'){$('pbar').style.width=v+'%';$('stxt').textContent=m;}},d));
+  var steps=[[200,20,'PDF 읽는 중...'],[800,50,'내용 분석 중...'],[1600,75,'문제 생성 중...'],[2500,90,'마무리 중...']];
+  steps.forEach(function(s){
+    setTimeout(function(){
+      if($('loading-area').style.display!=='none'){
+        $('pbar').style.width=s[1]+'%';
+        $('stxt').textContent=s[2];
+      }
+    }, s[0]);
+  });
 }
 
 function renderQs(qs){
-  const con=$('qcon');
-  qs.forEach(q=>{
-    const div=document.createElement('div');div.className='qcard';div.id='q-'+q.id;
-    const tags={mc:'<span class="tag tag-mc">객관식</span>',ox:'<span class="tag tag-ox">OX</span>',sa:'<span class="tag tag-sa">단답형</span>'};
-    let opts='';
+  var con = $('qcon');
+  qs.forEach(function(q){
+    var div = document.createElement('div');
+    div.className='qcard'; div.id='q-'+q.id;
+    var tags = {mc:'<span class="tag tag-mc">객관식</span>',ox:'<span class="tag tag-ox">OX</span>',sa:'<span class="tag tag-sa">단답형</span>'};
+    var opts = '';
     if(q.type==='mc'){
-      opts='<div class="opts">'+q.options.map((o,i)=>{
-        const s=o.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-        return `<button class="opt" onclick="ansMC(${q.id},'${s}',this)" data-val="${s}"><span class="olbl">${['①','②','③','④'][i]||''}</span><span>${o}</span></button>`;
-      }).join('')+'</div>';
-    }else if(q.type==='ox'){
-      opts=`<div class="ox-row"><button class="ox-btn" onclick="ansOX(${q.id},'O',this)" title="O">⭕</button><button class="ox-btn" onclick="ansOX(${q.id},'X',this)" title="X">❌</button></div>`;
-    }else{
-      opts=`<div class="sa-row"><input class="sa-inp" type="text" id="sa-${q.id}" placeholder="답 입력 후 Enter" onkeydown="if(event.key==='Enter')ansSA(${q.id})"><button class="btn-sec" onclick="ansSA(${q.id})">제출</button></div>`;
+      opts = '<div class="opts">' + q.options.map(function(o,i){
+        var s = o.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return '<button class="opt" onclick="ansMC('+q.id+',\''+s+'\',this)" data-val="'+s+'"><span class="olbl">'+(['①','②','③','④'][i]||'')+'</span><span>'+o+'</span></button>';
+      }).join('') + '</div>';
+    } else if(q.type==='ox'){
+      opts = '<div class="ox-row"><button class="ox-btn" onclick="ansOX('+q.id+',\'O\',this)" title="O">⭕</button><button class="ox-btn" onclick="ansOX('+q.id+',\'X\',this)" title="X">❌</button></div>';
+    } else {
+      opts = '<div class="sa-row"><input class="sa-inp" type="text" id="sa-'+q.id+'" placeholder="답 입력 후 Enter" onkeydown="if(event.key===\'Enter\')ansSA('+q.id+')"><button class="btn-sec" onclick="ansSA('+q.id+')">제출</button></div>';
     }
-    div.innerHTML=`${tags[q.type]||''}<div class="qnum">Q.${q.id}</div><div class="qtxt">${q.question}</div>${opts}<div class="exp" id="exp-${q.id}"><strong>해설:</strong> ${q.explanation}</div>`;
+    div.innerHTML = (tags[q.type]||'')+'<div class="qnum">Q.'+q.id+'</div><div class="qtxt">'+q.question+'</div>'+opts+'<div class="exp" id="exp-'+q.id+'"><strong>해설:</strong> '+q.explanation+'</div>';
     con.appendChild(div);
   });
 }
 
-function ansMC(id,val){
-  if(answers[id]!==undefined)return;
-  const q=questions.find(q=>q.id===id);
-  $('q-'+id).querySelectorAll('.opt').forEach(b=>{b.disabled=true;if(b.dataset.val===q.answer)b.classList.add('correct');if(b.dataset.val===val&&val!==q.answer)b.classList.add('wrong');});
-  record(id,val===q.answer);
+function ansMC(id,val,btn){
+  if(answers[id]!==undefined) return;
+  var q = questions.find(function(q){ return q.id===id; });
+  document.querySelectorAll('#q-'+id+' .opt').forEach(function(b){
+    b.disabled=true;
+    if(b.dataset.val===q.answer) b.classList.add('correct');
+    if(b.dataset.val===val && val!==q.answer) b.classList.add('wrong');
+  });
+  record(id, val===q.answer);
 }
-function ansOX(id,val){
-  if(answers[id]!==undefined)return;
-  const q=questions.find(q=>q.id===id);
-  $('q-'+id).querySelectorAll('.ox-btn').forEach(b=>{b.disabled=true;if(b.title===q.answer)b.classList.add('correct');if(b.title===val&&val!==q.answer)b.classList.add('wrong');});
-  record(id,val===q.answer);
+
+function ansOX(id,val,btn){
+  if(answers[id]!==undefined) return;
+  var q = questions.find(function(q){ return q.id===id; });
+  document.querySelectorAll('#q-'+id+' .ox-btn').forEach(function(b){
+    b.disabled=true;
+    if(b.title===q.answer) b.classList.add('correct');
+    if(b.title===val && val!==q.answer) b.classList.add('wrong');
+  });
+  record(id, val===q.answer);
 }
+
 function ansSA(id){
-  if(answers[id]!==undefined)return;
-  const inp=$('sa-'+id);const val=inp.value.trim();if(!val){toast('답을 입력해주세요.');return;}
-  const q=questions.find(q=>q.id===id);
-  inp.disabled=true;const sb=inp.nextElementSibling;if(sb)sb.disabled=true;
-  const ok=val.toLowerCase().includes(q.answer.toLowerCase())||q.answer.toLowerCase().includes(val.toLowerCase());
-  inp.style.borderColor=ok?'var(--success)':'var(--danger)';
-  if(!ok){const h=document.createElement('div');h.style.cssText='font-size:.775rem;color:var(--danger);margin-top:5px';h.textContent='정답: '+q.answer;inp.parentElement.insertAdjacentElement('afterend',h);}
-  record(id,ok);
+  if(answers[id]!==undefined) return;
+  var inp = $('sa-'+id);
+  var val = inp.value.trim();
+  if(!val){ toast('답을 입력해주세요.'); return; }
+  var q = questions.find(function(q){ return q.id===id; });
+  inp.disabled=true;
+  var sb=inp.nextElementSibling; if(sb) sb.disabled=true;
+  var ok = val.toLowerCase().includes(q.answer.toLowerCase()) || q.answer.toLowerCase().includes(val.toLowerCase());
+  inp.style.borderColor = ok ? 'var(--success)' : 'var(--danger)';
+  if(!ok){
+    var h=document.createElement('div');
+    h.style.cssText='font-size:.775rem;color:var(--danger);margin-top:5px';
+    h.textContent='정답: '+q.answer;
+    inp.parentElement.insertAdjacentElement('afterend',h);
+  }
+  record(id, ok);
 }
+
 function record(id,ok){
-  answers[id]=ok;allAns.push({id,ok});
-  if(ok)correct++;else wrong++;
+  answers[id]=ok; allAns.push({id:id,ok:ok});
+  if(ok) correct++; else wrong++;
   updateStats();
-  const e=$('exp-'+id);if(e)e.classList.add('show');
+  var e=$('exp-'+id); if(e) e.classList.add('show');
 }
-function updateStats(){$('sc').textContent=correct;$('sw').textContent=wrong;$('sr').textContent=questions.length-Object.keys(answers).length;}
+
+function updateStats(){
+  $('sc').textContent=correct;
+  $('sw').textContent=wrong;
+  $('sr').textContent=questions.length-Object.keys(answers).length;
+}
 
 function showResult(){
-  const ans=Object.keys(answers).length;
-  const pct=ans>0?Math.round((correct/ans)*100):0;
+  var ans=Object.keys(answers).length;
+  var pct=ans>0?Math.round((correct/ans)*100):0;
   $('rscore').textContent=pct+'%';
-  const grade=pct>=90?'🏆 우수!':pct>=70?'👍 잘했어요':pct>=50?'📚 조금 더 공부해요':'💪 다시 도전!';
+  var grade=pct>=90?'🏆 우수!':pct>=70?'👍 잘했어요':pct>=50?'📚 조금 더 공부해요':'💪 다시 도전!';
   $('rlbl').textContent=grade+' · '+ans+'문제 중 '+correct+'개 정답';
-  $('rcor').textContent=correct;$('rwrong').textContent=wrong;$('rtotal').textContent=ans;
-  $('quiz-area').style.display='none';$('result-area').style.display='block';
+  $('rcor').textContent=correct; $('rwrong').textContent=wrong; $('rtotal').textContent=ans;
+  $('quiz-area').style.display='none'; $('result-area').style.display='block';
   window.scrollTo({top:0,behavior:'smooth'});
 }
+
 function toggleReview(){
-  const c=$('rev-con');
-  if(c.childElementCount>0){c.innerHTML='';$('review-btn').textContent='📋  오답 확인';return;}
+  var c=$('rev-con');
+  if(c.childElementCount>0){ c.innerHTML=''; $('review-btn').textContent='📋  오답 확인'; return; }
   $('review-btn').textContent='📋  오답 닫기';
-  const wrongs=allAns.filter(a=>!a.ok);
-  if(!wrongs.length){c.innerHTML='<div class="card" style="text-align:center;color:var(--success)">🎉 오답이 없어요!</div>';return;}
-  wrongs.forEach(a=>{
-    const q=questions.find(q=>q.id===a.id);
-    const d=document.createElement('div');d.className='rev-item';
-    d.innerHTML=`<div class="rev-q">Q.${q.id} &nbsp;${q.question}</div><div class="rev-ans">✓ 정답: ${q.answer}</div><div class="rev-exp">${q.explanation}</div>`;
+  var wrongs=allAns.filter(function(a){ return !a.ok; });
+  if(!wrongs.length){ c.innerHTML='<div class="card" style="text-align:center;color:var(--success)">🎉 오답이 없어요!</div>'; return; }
+  wrongs.forEach(function(a){
+    var q=questions.find(function(q){ return q.id===a.id; });
+    var d=document.createElement('div'); d.className='rev-item';
+    d.innerHTML='<div class="rev-q">Q.'+q.id+' '+q.question+'</div><div class="rev-ans">✓ 정답: '+q.answer+'</div><div class="rev-exp">'+q.explanation+'</div>';
     c.appendChild(d);
   });
 }
-async function retrySet(){
-  questions=[];answers={};correct=0;wrong=0;allAns=[];
-  $('result-area').style.display='none';$('qcon').innerHTML='';$('rev-con').innerHTML='';
-  $('loading-area').style.display='block';animPbar();await genQs(true);
+
+function retrySet(){
+  questions=[]; answers={}; correct=0; wrong=0; allAns=[];
+  $('result-area').style.display='none'; $('qcon').innerHTML=''; $('rev-con').innerHTML='';
+  $('loading-area').style.display='block'; animPbar(); genQs(true);
 }
+
 function resetAll(){
-  questions=[];answers={};correct=0;wrong=0;allAns=[];pdfFile=null;pdfName='';
-  $('pdf-input').value='';$('finfo').classList.remove('show');$('gen-btn').disabled=true;
-  $('qcon').innerHTML='';$('rev-con').innerHTML='';
-  $('result-area').style.display='none';$('quiz-area').style.display='none';$('loading-area').style.display='none';
-  $('setup-area').style.display='block';window.scrollTo({top:0,behavior:'smooth'});
+  questions=[]; answers={}; correct=0; wrong=0; allAns=[]; pdfBase64=null; pdfName='';
+  $('pdf-input').value=''; $('finfo').classList.remove('show'); $('gen-btn').disabled=true;
+  $('qcon').innerHTML=''; $('rev-con').innerHTML='';
+  $('result-area').style.display='none'; $('quiz-area').style.display='none';
+  $('loading-area').style.display='none'; $('setup-area').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
 }
-function toast(msg,isErr=false){
-  const el=$('toast');el.textContent=msg;el.className='toast show'+(isErr?' err':'');
-  setTimeout(()=>el.className='toast',2800);
+
+function toast(msg,isErr){
+  var el=$('toast'); el.textContent=msg;
+  el.className='toast show'+(isErr?' err':'');
+  setTimeout(function(){ el.className='toast'; }, 2800);
 }
 </script>
 </body>
