@@ -320,7 +320,7 @@ function genQs(isFirst){
 
   var prompt='이 PDF 문서를 꼼꼼히 분석해서 '+(dmap[qdiff]||'중간 난이도의')+' 시험문제 '+qcount+'개를 만들어주세요.\n'+(tmap[qtype]||tmap.mixed)+' 출제해주세요.'+avoidStr+'\n\n반드시 아래 JSON 형식만 반환하세요 (마크다운 없이 순수 JSON):\n{"questions":[{"id":1,"type":"mc","question":"문제","options":["①보기1","②보기2","③보기3","④보기4"],"answer":"①보기1","explanation":"해설"},{"id":2,"type":"ox","question":"문제","options":["O","X"],"answer":"O","explanation":"해설"},{"id":3,"type":"sa","question":"___ 에 들어갈 말은?","options":[],"answer":"키워드","explanation":"해설"}]}\n\n규칙: type은 mc/ox/sa 중 하나, mc의 answer는 options 중 하나와 정확히 일치, ox의 answer는 O 또는 X, sa의 answer는 짧은 키워드, 모든 문제는 PDF 내용에서만 출제';
 
-  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+getKey(), {
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+getKey(), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
